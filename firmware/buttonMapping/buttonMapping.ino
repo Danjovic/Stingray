@@ -95,6 +95,11 @@ void loop() {
 void disableOutputs() {
 #ifdef DEBUG
   Serial.println("Disable Outputs");
+    potX1 = 255;
+    potY1 = 255;
+
+    potX2 = 255;
+    potY2 = 255;
 #endif  
 }
 

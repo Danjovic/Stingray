@@ -86,6 +86,9 @@
 
 
 
+#include <NintendoExtensionCtrl.h>
+
+
 
 /*******************************************************************************
  *         _      __ _      _ _   _             
@@ -95,7 +98,7 @@
  *                                              
  */
 
-//#define DEBUG 1
+#define DEBUG
  
 #define _key1        ((0<<3)|(0<<2)|(0<<1)|(0<<0)) // 0
 #define _key2        ((0<<3)|(0<<2)|(0<<1)|(1<<0)) // 1
@@ -115,23 +118,23 @@
 #define _keyNone     ((1<<3)|(1<<2)|(1<<1)|(1<<0)) // 15
 
 //      Signal Name     Arduino pin 
-#define inputMuxA         8
-#define inputMuxB         9
-#define outputMuxA        10
-#define outputMuxB        11
-#define outputMuxInhibt   12
+#define inputMuxApin         8
+#define inputMuxBpin         9
+#define outputMuxApin        10
+#define outputMuxBpin        11
+#define outputMuxInhibtPin   12
 
-#define potX1             5 
-#define potY1             4 
-#define fireTop1          3 
-#define fireBottom1       2 
+#define potX1pin             5 
+#define potY1pin             4 
+#define fireTop1pin          3 
+#define fireBottom1pin       2 
 
-#define potX2             A0
-#define potY2             A3
-#define fireTop2          A2
-#define fireBottom2       A1
+#define potX2pin             A0
+#define potY2pin             A3
+#define fireTop2pin          A2
+#define fireBottom2pin       A1
 
-#define caVinput          13
+#define caVinputPin          13
 
 // Bit mapped buttons
 #define btnUp     (1<<0)
@@ -146,12 +149,12 @@
 #define btnX      (1<<9)
 #define btnA      (1<<10)
 #define btnB      (1<<11)
-#define btnLFT    (1<<13)
-#define btnRGT    (1<<14)
+#define btnLFT    (1<<12)
+#define btnRGT    (1<<13)
 #define btnZr     (1<<14)
 #define btnZl     (1<<15)
 
-#define buttonMode buttonZL
+#define btnMode btnZl
 /*******************************************************************************
  *                                
  *      _ __  __ _ __ _ _ ___ ___ 
@@ -159,12 +162,12 @@
  *     |_|_|_\__,_\__|_| \___/__/ 
  *                                
  */
-#define pushX1() do { pinMode(potX1,OUTPUT); digitalWrite(potX1,HIGH); } while (0)
-#define pushX2() do { pinMode(potX2,OUTPUT); digitalWrite(potX2,HIGH); } while (0)
-#define pushY1() do { pinMode(potY1,OUTPUT); digitalWrite(potY1,HIGH); } while (0)
-#define pushY2() do { pinMode(potY2,OUTPUT); digitalWrite(potY2,HIGH); } while (0)
+#define pushX1() do { pinMode(potX1pin,OUTPUT); digitalWrite(potX1pin,HIGH); } while (0)
+#define pushX2() do { pinMode(potX2pin,OUTPUT); digitalWrite(potX2pin,HIGH); } while (0)
+#define pushY1() do { pinMode(potY1pin,OUTPUT); digitalWrite(potY1pin,HIGH); } while (0)
+#define pushY2() do { pinMode(potY2pin,OUTPUT); digitalWrite(potY2pin,HIGH); } while (0)
 
-
+#define dualJoystick() (digitalRead(0)==0) //analogRead(pinDetectDual)< thresholdDetectDual
 
 /*******************************************************************************
  *   _              _   _                         _       _                     
@@ -200,6 +203,13 @@ enum controllerType {
   _unKnown =0xff
   };
 
+const uint8_t gammaCurve[64] = { // gamma = 2.0
+5  , 12 , 18 , 24 , 30 , 36 , 42 , 47 , 52 , 57 , 62 , 66 , 71 , 75 , 78 , 82 , 
+86 , 89 , 92 , 95 , 97 , 100, 102, 104, 106, 107, 109, 110, 111, 112, 112, 112, 
+113, 113, 113, 114, 114, 115, 117, 118, 120, 122, 124, 126, 129, 131, 134, 138, 
+141, 145, 149, 153, 157, 162, 167, 172, 177, 182, 188, 194, 200, 207, 213, 220 
+};
+
 
 /*******************************************************************************
  *                   _      _    _        
@@ -217,16 +227,17 @@ static volatile uint8_t potY2value = 0;
 
 uint8_t combinedXaxis;  // ponderated value of both stick movement on X axis
 uint8_t combinedYaxis;  // ponderated value of both stick movement on Y axis
-uint8_t leftXaxis;      // individual stick values in the range of 5-220 (min-max)
+uint8_t  leftXaxis;      
 uint8_t rightXaxis;
-uint8_t leftXaxis;
-uint8_t leftYaxis;
+uint8_t  leftYaxis;
+uint8_t rightYaxis;
 
 uint16_t combinedButtons = 0;
 
 ExtensionPort controller;
 Nunchuk::Shared nchuk(controller);  // Read Nunchuk formatted data from the port
 ClassicController::Shared classic(controller);  // Read Classic Controller formatted data from the port
+
 
 
 /*******************************************************************************
@@ -236,41 +247,16 @@ ClassicController::Shared classic(controller);  // Read Classic Controller forma
  *     |_|_||_\__\___|_| |_|  \_,_| .__/\__/__/
  *                                |_|          
  */
-/*
-// External interrupt, triggers every time CAV voltage changes state.
-ISR (INT1_vect, ISR_NAKED) { 
-  asm volatile (
-    "push __tmp_reg__\n\t"         //
-    "in __tmp_reg__,__SREG__\n\t"  //  Save Context
-    "push __tmp_reg__\n\t"         //  
-    "clr __tmp_reg__\n\t"         // temp_reg=0 CAVoff = false
-    "sbic %[PORTIN],3 \n\t"       // CAV has dropped?
-    "rjmp _STORE\n\t"             // no update value
-    "cbi %[PORTPOTS],2\n\t"       // yes, force pin Y to zero
-    "sbi %[DDRPOTS],2\n\t"
-    "cbi %[PORTPOTS],3\n\t"       // yes, force pin X to zero
-    "sbi %[DDRPOTS],3\n\t"
-    "inc __tmp_reg__\n\t"         // temp_reg=1 CAVoff = true                        
-    "_STORE:\n\t"
-     "sts %[flagCAVoff],__tmp_reg__\n\t" // store CAVoff flag value
-    "pop __tmp_reg__\n\t"           //
-    "out __SREG__,__tmp_reg__\n\t"  // Restore Context
-    "pop __tmp_reg__\n\t"           //
-    "reti \n\t"
-    :[flagCAVoff] "=m"(CAVoff)
-    :[PORTIN]"I" (_SFR_IO_ADDR(PIND)),[DDRPOTS]"I" (_SFR_IO_ADDR(DDRB)) ,[PORTPOTS]"I" (_SFR_IO_ADDR(PORTB)) 
-    );  
-  }
-*/
+
 
 // Pin change interrupt, trigger by Cav line change state.
 ISR (PCINT0_vect) {
-	if (digitalRead(caVinput)) {  // rising edge ?
+	if (digitalRead(caVinputPin)) {  // rising edge ?
        // Enable detection of pokey release pin for charging
-       pinMode(potX1,INPUT); 
-	   pinMode(potX2,INPUT); 
-	   pinMode(potY1,INPUT);	   
-	   pinMode(potY2,INPUT);
+       pinMode(potX1pin,INPUT); 
+	   pinMode(potX2pin,INPUT); 
+	   pinMode(potY1pin,INPUT);	   
+	   pinMode(potY2pin,INPUT);
        CAVoff = 0;	  // flag that CAV voltage is present 	   
        ACSR |= (1<<ACIE)  // reactivate analog comparator
               |(1<<ACI);  // clear any pending interrupt bit	   
@@ -298,10 +284,10 @@ ISR (TIMER2_COMPA_vect) {
       
     } else if (hline==227) {
        //last line, release all pins to make possible to detect next discharge
-       pinMode(potX1,INPUT); 
-	   pinMode(potX2,INPUT); 
-	   pinMode(potY1,INPUT);	   
-	   pinMode(potY2,INPUT);	
+       pinMode(potX1pin,INPUT); 
+	     pinMode(potX2pin,INPUT); 
+	     pinMode(potY1pin,INPUT);	   
+	     pinMode(potY2pin,INPUT);	
 
        ACSR |= (1<<ACIE)  // reactivate analog comparator
               |(1<<ACI);  // clear any pending interrupt bit
@@ -312,8 +298,8 @@ ISR (TIMER2_COMPA_vect) {
 // Analog comparator, triggers when detect that pokey released POT inputs to charge
 ISR (ANALOG_COMP_vect) {
 //  pulseFlag();    
-  pinMode(potX1,OUTPUT);   // hold axis pin in LOW state
-  digitalWrite(potX1,LOW); 
+  pinMode(potX1pin,OUTPUT);   // hold axis pin in LOW state
+  digitalWrite(potX1pin,LOW); 
 
   hline=0;
   ACSR &=~(1<<ACIE);  // disable comparator
@@ -331,30 +317,30 @@ ISR (ANALOG_COMP_vect) {
 void setup() {
 	
   // setup I/O pins
-  pinMode(fireTop1    ,INPUT) ; // Trigger pins all open
-  pinMode(fireBottom1 ,INPUT) ; 
-  pinMode(fireTop2    ,INPUT) ;
-  pinMode(fireBottom2 ,INPUT) ;  
+  pinMode(fireTop1pin    ,INPUT) ; // Trigger pins all open
+  pinMode(fireBottom1pin ,INPUT) ; 
+  pinMode(fireTop2pin    ,INPUT) ;
+  pinMode(fireBottom2pin ,INPUT) ;  
   
-  pinMode(potX1,INPUT) ; // Potentiometer pins as inputs 
-  pinMode(potY1,INPUT) ; 
-  pinMode(potX2,INPUT) ;
-  pinMode(potY2,INPUT) ;
+  pinMode(potX1pin,INPUT) ; // Potentiometer pins as inputs 
+  pinMode(potY1pin,INPUT) ; 
+  pinMode(potX2pin,INPUT) ;
+  pinMode(potY2pin,INPUT) ;
   
-  digitalWrite(potX1,LOW); // disable pullups on potentiometer pins 
-  digitalWrite(potX2,LOW); 
-  digitalWrite(potY1,LOW); 
-  digitalWrite(potY2,LOW); 
+  digitalWrite(potX1pin,LOW); // disable pullups on potentiometer pins 
+  digitalWrite(potX2pin,LOW); 
+  digitalWrite(potY1pin,LOW); 
+  digitalWrite(potY2pin,LOW); 
   
-  pinMode(outputMuxB,OUTPUT); // All keyboard mux pins as outputs
-  pinMode(outputMuxA,OUTPUT); 
-  pinMode(inputMuxB ,OUTPUT); 
-  pinMode(inputMuxA ,OUTPUT);   
-  pinMode(muxInhibt ,OUTPUT);
+  pinMode(outputMuxBpin,OUTPUT); // All keyboard mux pins as outputs
+  pinMode(outputMuxApin,OUTPUT); 
+  pinMode(inputMuxBpin ,OUTPUT); 
+  pinMode(inputMuxApin ,OUTPUT);   
+  pinMode(outputMuxInhibtPin ,OUTPUT);
  
-  digitalWrite(muxInhibt,HIGH); // Disable mux (no key pressed on keypad)
+  digitalWrite(outputMuxInhibtPin,HIGH); // Disable mux (no key pressed on keypad)
  
-  pinMode(caVinput,INPUT);
+  pinMode(caVinputPin,INPUT);
  
    // Setup Timer2
   TCCR2A = (0<<WGM20)   // WGM[2..0] = 010 CTC mode, counts up overflow on OCR2A
@@ -455,107 +441,85 @@ void setKeypad ( uint8_t keyCode) {
   Serial.print ("->");  
   Serial.println (key[keyCode]);
 #endif
-  if (keyCode & (1<<3) ) digitalWrite(outputMuxB,HIGH); else digitalWrite(outputMuxB,LOW);
-  if (keyCode & (1<<2) ) digitalWrite(outputMuxA,HIGH); else digitalWrite(outputMuxA,LOW); 
+  if (keyCode & (1<<3) ) digitalWrite(outputMuxBpin,HIGH); else digitalWrite(outputMuxBpin,LOW);
+  if (keyCode & (1<<2) ) digitalWrite(outputMuxApin,HIGH); else digitalWrite(outputMuxApin,LOW); 
   
-  if (keyCode & (1<<1) ) digitalWrite(inputMuxB,HIGH); else digitalWrite(inputMuxB,LOW);
-  if (keyCode & (1<<0) ) digitalWrite(inputMuxA,HIGH); else digitalWrite(inputMuxA,LOW);
+  if (keyCode & (1<<1) ) digitalWrite(inputMuxBpin,HIGH); else digitalWrite(inputMuxBpin,LOW);
+  if (keyCode & (1<<0) ) digitalWrite(inputMuxApin,HIGH); else digitalWrite(inputMuxApin,LOW);
 
   if ( keyCode == _keyNone ) {
-    digitalWrite(outputMuxInhibt,HIGH);  // inhibt output 
+    digitalWrite(outputMuxInhibtPin,HIGH);  // inhibt output 
   } else {
-    digitalWrite(outputMuxInhibt,LOW);   
+    digitalWrite(outputMuxInhibtPin,LOW);   
   }
 }
 
+
 //
 //
-void setMinimumX(void) {
-  if (!CAVoff) {
-    digitalWrite(potXfull,HIGH);
-    pinMode(potXfull,OUTPUT);
-  }
+void assertTopFire2(void) {
+  digitalWrite(fireTop2pin,LOW); // turn off pullup
+  pinMode(fireTop2pin,OUTPUT);   
 }
 
 //
 //
-void setMaximumX(void) {
-  if (!CAVoff) {
-    pinMode(potXhalf,INPUT);
-    digitalWrite(potXhalf,LOW); // turn off pullup
-    pinMode(potXfull,INPUT);
-    digitalWrite(potXfull,LOW);  // turn off pullup
-  } 
+void releaseTopFire2(void) {
+  pinMode(fireTop2pin,INPUT);
+  digitalWrite(fireTop2pin,HIGH); // turn on pullup
 }
 
 //
 //
-void setMiddleX(void){
-  if (!CAVoff) {
-    pinMode(potXfull,INPUT);
-    digitalWrite(potXfull,LOW);  // turn off pullup   
-    digitalWrite(potXhalf,HIGH);    
-    pinMode(potXhalf,OUTPUT);
-  } 
+void assertBottomFire2(void) {
+  digitalWrite(fireBottom2pin,LOW); // turn off pullup
+  pinMode(fireBottom2pin,OUTPUT);   
 }
 
 //
 //
-void setMinimumY(void) {
-  if (!CAVoff) {
-    digitalWrite(potYfull,HIGH);
-    pinMode(potYfull,OUTPUT);
-  }
+void releaseBottomFire2(void) {
+  pinMode(fireBottom1pin,INPUT);
+  digitalWrite(fireBottom2pin,HIGH); // turn on pullup
+}
+
+
+
+
+
+
+
+
+
+
+
+
+//
+//
+void assertTopFire1(void) {
+  digitalWrite(fireTop1pin,LOW); // turn off pullup
+  pinMode(fireTop1pin,OUTPUT);   
 }
 
 //
 //
-void setMaximumY(void) {
-  if (!CAVoff) {
-    pinMode(potYhalf,INPUT);
-    digitalWrite(potYhalf,LOW); // turn off pullup
-    pinMode(potYfull,INPUT);
-    digitalWrite(potYfull,LOW);  // turn off pullup
-  } 
+void releaseTopFire1(void) {
+  pinMode(fireTop1pin,INPUT);
+  digitalWrite(fireTop1pin,HIGH); // turn on pullup
 }
 
 //
 //
-void setMiddleY(void){
-  if (!CAVoff) {
-    pinMode(potYfull,INPUT);
-    digitalWrite(potYfull,LOW);  // turn off pullup   
-    digitalWrite(potYhalf,HIGH);    
-    pinMode(potYhalf,OUTPUT);
-  } 
+void assertBottomFire1(void) {
+  digitalWrite(fireBottom1pin,LOW); // turn off pullup
+  pinMode(fireBottom1pin,OUTPUT);   
 }
 
 //
 //
-void assertTopFire(void) {
-  digitalWrite(fireTop,LOW); // turn off pullup
-  pinMode(fireTop,OUTPUT);   
-}
-
-//
-//
-void releaseTopFire(void) {
-  pinMode(fireTop,INPUT);
-  digitalWrite(fireTop,HIGH); // turn on pullup
-}
-
-//
-//
-void assertBottomFire(void) {
-  digitalWrite(fireBottom,LOW); // turn off pullup
-  pinMode(fireBottom,OUTPUT);   
-}
-
-//
-//
-void releaseBottomFire(void) {
-  pinMode(fireBottom,INPUT);
-  digitalWrite(fireBottom,HIGH); // turn on pullup
+void releaseBottomFire1(void) {
+  pinMode(fireBottom1pin,INPUT);
+  digitalWrite(fireBottom1pin,HIGH); // turn on pullup
 }
 
 //
@@ -571,85 +535,137 @@ void disableOutputs() {
 //
 //
 void mapNunchuckData() { 
-    nchuk.printDebug();  
+  
+  //  Get button State
+  combinedButtons=0;
+  if (nchuk.buttonZ()      ) combinedButtons |= btnA;     // (1<<4 )
+  if (nchuk.buttonC()      ) combinedButtons |= btnB;     // (1<<5 )
+
+
+
+  // Get Analog Values 
+  leftXaxis=nchuk.joyX()>>2;        // get values from left stick [0..63]
+  leftYaxis=nchuk.joyY()>>2;
+  
+ //map(value, fromLow, fromHigh, toLow, toHigh)    
+  rightXaxis= map( nchuk.rollAngle(),-180,180,0,63);
+  rightYaxis= map(nchuk.pitchAngle(),-180,180,0,63);
+
+  combinedXaxis=leftXaxis;
+  combinedYaxis=leftYaxis;
+ 
+
+    
 }
 
 //
 //
 void mapClassicData() {
-
-//  deal with buttons
-combinedButtons=0;
-if (classic.dpadUp()     ) combinedButtons |= btnUp;    // (1<<0 )
-if (classic.dpadDown()   ) combinedButtons |= btnDown;  // (1<<1 )
-if (classic.dpadLeft()   ) combinedButtons |= btnLeft;  // (1<<2 )
-if (classic.dpadRight(   ) combinedButtons |= btnRight; // (1<<3 )
-if (classic.buttonA()    ) combinedButtons |= btnA;     // (1<<4 )
-if (classic.buttonB()    ) combinedButtons |= btnB;     // (1<<5 )
-if (classic.buttonX()    ) combinedButtons |= btnX;     // (1<<6 )
-if (classic.buttonY()    ) combinedButtons |= btnY;     // (1<<7 )
-if (classic.buttonL()    ) combinedButtons |= btnL;     // (1<<8 )
-if (classic.buttonR()    ) combinedButtons |= btnR;     // (1<<9 )
-if (classic.buttonZL()   ) combinedButtons |= btnZL;    // (1<<10) -> Mode button
-if (classic.buttonZR()   ) combinedButtons |= btnZR;    // (1<<11)
-if (classic.buttonMinus()) combinedButtons |= btnMinus; // (1<<13)
-if (classic.buttonHome() ) combinedButtons |= btnHome;  // (1<<14)
-if (classic.buttonPlus() ) combinedButtons |= btnPlus;  // (1<<12)
-
-// deal with POTs
+  //  Get button State
+  combinedButtons=0;
+  if (classic.dpadUp()     ) combinedButtons |= btnUp;    // (1<<0 )
+  if (classic.dpadDown()   ) combinedButtons |= btnDown;  // (1<<1 )
+  if (classic.dpadLeft()   ) combinedButtons |= btnLeft;  // (1<<2 )
+  if (classic.dpadRight()  ) combinedButtons |= btnRight; // (1<<3 )
+  if (classic.buttonA()    ) combinedButtons |= btnA;     // (1<<4 )
+  if (classic.buttonB()    ) combinedButtons |= btnB;     // (1<<5 )
+  if (classic.buttonX()    ) combinedButtons |= btnX;     // (1<<6 )
+  if (classic.buttonY()    ) combinedButtons |= btnY;     // (1<<7 )
+  if (classic.buttonL()    ) combinedButtons |= btnLFT;   // (1<<8 )
+  if (classic.buttonR()    ) combinedButtons |= btnRGT;   // (1<<9 )
+  if (classic.buttonZL()   ) combinedButtons |= btnZl;    // (1<<10) -> Mode button
+  if (classic.buttonZR()   ) combinedButtons |= btnZr;    // (1<<11)
+  if (classic.buttonMinus()) combinedButtons |= btnMinus; // (1<<13)
+  if (classic.buttonHome() ) combinedButtons |= btnHome;  // (1<<14)
+  if (classic.buttonPlus() ) combinedButtons |= btnPlus;  // (1<<12)
 
 
-}
+  // Get Analog Values 
+  leftXaxis=classic.leftJoyX();         // get values from left stick [0..63]
+  leftYaxis=classic.leftJoyY(); 
+  rightXaxis=(classic.rightJoyX()<<1);  // get the values for right [0..31]
+  rightYaxis=(classic.rightJoyY()<<1);  // and double then for [0..62]
+
+
+  // If D-Pad is pressed without a mode key then the D-Pad direction overimposes left X/Y axis
+  if ((combinedButtons & btnMode)==0 ) {
+   // vertical axis, inverted (up=63,down=0)
+   if ( (combinedButtons & btnUp) && !(combinedButtons & btnDown) )
+       leftYaxis=63;
+   else if ( !(combinedButtons & btnUp) && (combinedButtons & btnDown) )
+           leftYaxis=0;
+
+   // horizontal axis, normal (left=0, right=63)
+   if ( (combinedButtons & btnLeft) && !(combinedButtons & btnRight) )
+      leftXaxis=0;
+   else if ( !(combinedButtons & btnLeft) && (combinedButtons & btnRight) )
+           leftXaxis=63; 
+    } // btnMode
+
+
+  // compute resulting X axis position
+  combinedXaxis = leftXaxis+rightXaxis-32;
+  if (combinedXaxis>63) combinedXaxis = 63;
+  if (combinedXaxis<0)  combinedXaxis = 0;
+
+  // compute resulting Y axis position
+  combinedYaxis = leftYaxis+rightYaxis-32;
+  if (combinedYaxis>63) combinedYaxis = 63;
+  if (combinedYaxis<0)  combinedYaxis = 0;
+  combinedYaxis = 63-combinedYaxis;    // invert Y (make up=0, down=63)
+  
+}  
+
 
 //
 //
 void  processControllerData() {
-if (combinedButtons & buttonMode) {
-      combinedButtons &= ~buttonMode;  // clear Mode button bit 
+if (combinedButtons & btnMode) {
+      combinedButtons &= ~btnMode;  // clear Mode button bit 
       switch(combinedButtons) {
-        case buttonUp:    // keypad 2
+        case btnUp:    // keypad 2
            setKeypad (_key2);
            break;
-//        case buttonDown:  // None
+//        case btnDown:  // None
 //           setKeypad (_keyNone);
 //           break;
-        case buttonLeft:  // keypad 1
+        case btnLeft:  // keypad 1
            setKeypad (_key1);
            break;
-        case buttonRight: // keypad 3
+        case btnRight: // keypad 3
            setKeypad (_key3);
            break;
-        case buttonA:     // keypad 9
+        case btnA:     // keypad 9
            setKeypad (_key9);
            break; 
-        case buttonB:     // keypad 0
+        case btnB:     // keypad 0
            setKeypad (_key0);
            break;
-        case buttonX:     // keypad 7
-           setKeypad (_key7);
-           break;
-        case buttonY:     // keypad 8
+        case btnX:     // keypad 8
            setKeypad (_key8);
+           break;
+        case btnY:     // keypad 7
+           setKeypad (_key7);
            break;    
-//      case buttonL:     // None    
+//      case btnL:     // None    
 //         setKeypad (_keyNone);
 //         break;  
-        case buttonR:     // Reset
+        case btnRGT:     // Reset
            setKeypad (_keyReset);
            break;
-//        case buttonZL:     // This is the modekey itself
+//        case btnZl:     // This is the modekey itself
 //           setKeypad (_key6);
 //           break;  
-        case buttonZR:     // Pause
+        case btnZr:     // Pause
            setKeypad (_keyPause);
            break;    
-        case buttonMinus: // keypad 4
+        case btnMinus: // keypad 4
            setKeypad (_key4);
            break;
-        case buttonHome:     // keypad 5
+        case btnHome:     // keypad 5
            setKeypad (_key5);
            break;  
-        case buttonPlus:     // keypad 6
+        case btnPlus:     // keypad 6
            setKeypad (_key6);
            break;
 
@@ -659,16 +675,16 @@ if (combinedButtons & buttonMode) {
 
     } else { // Mode button released
       switch(combinedButtons) {  // TODO add a mask for other bits.
-        case buttonMinus:     // keypad * 
+        case btnMinus:     // keypad * 
            setKeypad (_keyAsterisk);
            break;    
-        case buttonHome:     // keypad 0
+        case btnHome:     // keypad 0
            setKeypad (_key0);
            break;    
-        case buttonPlus:     // keypad #
+        case btnPlus:     // keypad #
            setKeypad (_keyHash);
            break;
-        case buttonZR: // Pause
+        case btnZr: // Pause
            setKeypad (_keyPause);
            break;
         default:       // None or multiple
@@ -676,47 +692,50 @@ if (combinedButtons & buttonMode) {
       } // switch
       
       // Take care of buttons
-  if (dualJoystick) {
-     if (combinedButtons &  buttonX) assertTopFire2()   ; else releaseTopFire2();
-      if (combinedButtons &  buttonY) assertBottomFire2(); else releaseBottomFire2();
+  if (dualJoystick()) {
+     if (combinedButtons &  btnX) assertTopFire2()   ; else releaseTopFire2();
+      if (combinedButtons &  btnY) assertBottomFire2(); else releaseBottomFire2();
 
-      if (combinedButtons &  (buttonA | buttonR ) assertTopFire1()   ; else releaseTopFire1();
-      if (combinedButtons &  (buttonB | buttonR ) assertBottomFire1(); else releaseBottomFire1();
+      if (combinedButtons &  (btnA | btnRGT )) assertTopFire1()   ; else releaseTopFire1();
+      if (combinedButtons &  (btnB | btnLFT )) assertBottomFire1(); else releaseBottomFire1();
   } else {
-       if (combinedButtons &  (buttonA | buttonL | buttonX ) assertTopFire1()   ; else releaseTopFire1();
-       if (combinedButtons &  (buttonB | buttonR | buttonY ) assertBottomFire1(); else releaseBottomFire1();
+       if (combinedButtons &  (btnA | btnRGT | btnX )) assertTopFire1()   ; else releaseTopFire1();
+       if (combinedButtons &  (btnB | btnLFT | btnY )) assertBottomFire1(); else releaseBottomFire1();
   }
 } 
       // Take care of directionals
+   
+
+  // Populate analog axes information. Values will be used by interrupts
+  if (dualJoystick()) { 
+    // Dual adapter connected, map different values for pot1/pot2
+    potX1value = gammaCurve[uint8_t(leftXaxis)];
+    potY1value = gammaCurve[uint8_t(leftYaxis)];
+
+    potX2value = gammaCurve[uint8_t(rightXaxis)];
+    potY2value = gammaCurve[uint8_t(rightYaxis)];
+
+    } else {
+      // Not using dual controller adapter, use combined stick values
+      potX1value = gammaCurve[uint8_t(combinedXaxis)];
+      potY1value = gammaCurve[uint8_t(combinedYaxis)];
   
-   if ( (combinedButtons & buttonUp) & !(combinedButtons & buttonDown) )
-      setYpot(5);
-   else if ( !(combinedButtons & buttonUp) & (combinedButtons & buttonDown) )
-           setYpot(220);
-   else if (!dualJoystick) {
-           setYpot(combinedYaxis ); // set at sum of both y axes
-    } else { // Dual Joystick
-        setYpot ( rightYaxis );  // set only value from right stick for dual joystick operation    
-    }
+      potX2value = potX1value;
+      potY2value = potY1value;      
+      }  
 
-   if ( (combinedButtons & buttonLeft) & !(combinedButtons & buttonRight) )
-      setXpot(5);
-   else if ( !(combinedButtons & buttonLeft) & (combinedButtons & buttonRight) )
-           setXpot(220);
-   else if (!dualJoystick) {
-           setXpot( combinedXaxis ); // set at sum of both y axes
-   } else { // Dual Joystick
-       setXpot ( rightXaxis );  // set only value from right stick for dual joystick operation    
-   }
-
-   // deal with pot values for dual mode 
-   if (dualJoystick) {
-   setYpot2(leftYaxis);
-   setXpot2(leftXaxis);
-   } else {
-   setYpot2(227);
-   setXpot2(227);
-   }
+#ifdef DEBUG
+   Serial.print(" potX1:"); Serial.print(potX1value);
+   Serial.print(" potY1:"); Serial.print(potY1value);
+   Serial.print("/potX2:"); Serial.print(potX2value);
+   Serial.print(" potY2:"); Serial.print(potY2value);  
+   Serial.print(" detect:");  Serial.print(dualJoystick());   
+   Serial.print(" ");Serial.print(combinedButtons,BIN);
+ //  Serial.println();
+#endif
+   
+   
+   
 }
 
 
