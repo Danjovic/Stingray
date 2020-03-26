@@ -652,8 +652,8 @@ void  processControllerData() {
       //        case btnZl:     // This is the modekey itself
       //           setKeypad (_key6);
       //           break;
-      case btnZr:     // Pause
-        setKeypad (_keyPause);
+      case btnZr:     // Start
+        setKeypad (_keyStart);
         break;
       case btnMinus: // keypad 4
         setKeypad (_key4);

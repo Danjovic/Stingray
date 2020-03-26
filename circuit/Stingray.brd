@@ -17,8 +17,8 @@
 <layer number="21" name="tPlace" color="7" fill="1" visible="yes" active="yes"/>
 <layer number="22" name="bPlace" color="7" fill="1" visible="no" active="yes"/>
 <layer number="23" name="tOrigins" color="15" fill="1" visible="yes" active="yes"/>
-<layer number="24" name="bOrigins" color="15" fill="1" visible="no" active="yes"/>
-<layer number="25" name="tNames" color="7" fill="1" visible="no" active="yes"/>
+<layer number="24" name="bOrigins" color="15" fill="1" visible="yes" active="yes"/>
+<layer number="25" name="tNames" color="7" fill="1" visible="yes" active="yes"/>
 <layer number="26" name="bNames" color="7" fill="1" visible="no" active="yes"/>
 <layer number="27" name="tValues" color="7" fill="1" visible="no" active="yes"/>
 <layer number="28" name="bValues" color="7" fill="1" visible="no" active="yes"/>
@@ -2129,19 +2129,19 @@ design rules under a new name.</description>
 <attribute name="VALUE" x="41.275" y="26.67" size="0.889" layer="27" ratio="11"/>
 </element>
 <element name="R5" library="rcl" package="0204/7" value="100R" x="10.16" y="22.86" smashed="yes" rot="R90">
-<attribute name="NAME" x="10.7696" y="15.875" size="0.9906" layer="25" ratio="10" rot="R90"/>
+<attribute name="NAME" x="10.7696" y="15.875" size="1.016" layer="25" ratio="10" rot="R90"/>
 <attribute name="VALUE" x="10.6426" y="21.2344" size="1.016" layer="27" ratio="10" rot="R90"/>
 </element>
 <element name="R6" library="rcl" package="0204/7" value="10k" x="31.115" y="40.64" smashed="yes" rot="R90">
-<attribute name="NAME" x="30.4546" y="36.195" size="0.9906" layer="25" ratio="10" rot="R90"/>
+<attribute name="NAME" x="30.4546" y="36.195" size="1.016" layer="25" ratio="10" rot="R90"/>
 <attribute name="VALUE" x="31.5976" y="39.0144" size="0.9906" layer="27" ratio="10" rot="R90"/>
 </element>
 <element name="R7" library="rcl" package="0204/7" value="10k" x="31.115" y="30.48" smashed="yes" rot="R90">
-<attribute name="NAME" x="30.4546" y="26.035" size="0.9906" layer="25" ratio="10" rot="R90"/>
+<attribute name="NAME" x="30.4546" y="26.035" size="1.016" layer="25" ratio="10" rot="R90"/>
 <attribute name="VALUE" x="31.5976" y="28.8544" size="0.9906" layer="27" ratio="10" rot="R90"/>
 </element>
 <element name="R8" library="rcl" package="0204/7" value="10k" x="31.115" y="20.32" smashed="yes" rot="R90">
-<attribute name="NAME" x="30.4546" y="15.875" size="0.9906" layer="25" ratio="10" rot="R90"/>
+<attribute name="NAME" x="30.4546" y="15.875" size="1.016" layer="25" ratio="10" rot="R90"/>
 <attribute name="VALUE" x="31.5976" y="18.6944" size="0.9906" layer="27" ratio="10" rot="R90"/>
 </element>
 <element name="X2" library="con-yamaichi" package="MDIN06SS" value="" x="45.72" y="39.37" smashed="yes" rot="R90">
