@@ -8440,13 +8440,13 @@ Based on  the following source:
 by exp-lbrs.ulp</description>
 <packages>
 <package name="WIICHUCK">
-<wire x1="4.5" y1="-3.4" x2="4.5" y2="3.4" width="0.127" layer="21"/>
+<wire x1="4.5" y1="-3.4" x2="4.5" y2="3.4" width="0.0254" layer="51"/>
 <rectangle x1="-4.45" y1="-3.4" x2="4.45" y2="3.4" layer="39"/>
-<smd name="1" x="0" y="2" dx="7.6" dy="1.3" layer="1"/>
+<smd name="1" x="0" y="-2" dx="7.6" dy="1.3" layer="1"/>
 <smd name="2" x="0" y="0" dx="7.6" dy="1.3" layer="1"/>
-<smd name="3" x="0" y="-2" dx="7.6" dy="1.3" layer="1"/>
-<smd name="4" x="0" y="-2" dx="7.6" dy="1.3" layer="16"/>
-<smd name="5" x="0" y="2" dx="7.6" dy="1.3" layer="16"/>
+<smd name="3" x="0" y="2" dx="7.6" dy="1.3" layer="1"/>
+<smd name="4" x="0" y="2" dx="7.6" dy="1.3" layer="16"/>
+<smd name="5" x="0" y="-2" dx="7.6" dy="1.3" layer="16"/>
 <text x="-4.445" y="3.81" size="0.889" layer="25" ratio="11">&gt;NAME</text>
 <text x="0" y="3.81" size="0.889" layer="27" ratio="11">&gt;VALUE</text>
 </package>
@@ -8682,8 +8682,10 @@ DIN female/male, etc.&lt;p&gt;
 <sheet>
 <plain>
 <text x="127" y="162.56" size="5.08" layer="94" font="vector" ratio="13" align="center">Wii Classic Controller adapter for Atari 5200</text>
-<text x="167.64" y="10.16" size="3.81" layer="94" font="vector" ratio="13">Danjovic 2020</text>
+<text x="76.2" y="17.78" size="3.81" layer="94" font="vector" ratio="13">Danjovic 2020</text>
 <text x="55.88" y="10.16" size="3.81" layer="94" font="vector" ratio="13">https://hackaday.io/danjovic</text>
+<text x="248.92" y="5.08" size="2.54" layer="94">A</text>
+<text x="162.56" y="20.32" size="1.27" layer="94" font="vector">Rev A: Corrected Mirrored Wii connector footprint</text>
 </plain>
 <instances>
 <instance part="K1" gate="-1" x="167.64" y="104.14" rot="R180"/>
