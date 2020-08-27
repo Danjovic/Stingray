@@ -521,11 +521,11 @@ void releaseBottomFire1(void) {
 void disableOutputs() {
 #ifdef DEBUG
   Serial.println("Disable Outputs");
+#endif    
     potX1value = 255;
     potY1value = 255;
     potX2value = 255;
     potY2value = 255;
-#endif  
 }
 
 
