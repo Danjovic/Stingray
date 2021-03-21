@@ -10,8 +10,11 @@
   Nintendo Wii Classic controller adapter for Atari 5200
   Danjovic 2020 - danjovic@hotmail.com - https://hackaday.io/danjovic
 
-  13 March 2020
-
+  13 March 2020 - Basic Release
+  29 March 2020 - Bug fixed and code improvement, thanks Chris Belcher for the feedback
+                - Pull down of all the axes lines on startup
+                - Fix deadlock condition on Vac control 
+  
   This adapter lets you play Atari 5200 using a Nintendo Wii Classic controller yet providing full keypad control.
 
   Main features are:
@@ -85,11 +88,13 @@
 */
 
 
+#include <NintendoExtensionCtrl.h>  
+// By Dave Madison. Use version 0.8.1 or newer
+// https://github.com/dmadison/NintendoExtensionCtrl
+#include <avr/pgmspace.h>
 
-#include <NintendoExtensionCtrl.h>
 
-
-
+ 
 /*******************************************************************************
            _      __ _      _ _   _
         __| |___ / _(_)_ _ (_) |_(_)___ _ _  ___
@@ -98,7 +103,7 @@
 
 */
 
-//#define DEBUG
+//#define DEBUG 1  // run debug only to check values as it messes with temporization
 
 #define _key1        ((0<<3)|(0<<2)|(0<<1)|(0<<0)) // 0
 #define _key2        ((0<<3)|(0<<2)|(0<<1)|(1<<0)) // 1
@@ -175,15 +180,6 @@
 
 #define dualJoystick() analogRead(pinDetectDual)< thresholdDetectDual
 
-/*******************************************************************************
-     _              _   _                         _       _
-   / _|_  _ _ _  __| |_(_)___ _ _    _ __ _ _ ___| |_ ___| |_ _  _ _ __  ___ ___
-  |  _| || | ' \/ _|  _| / _ \ ' \  | '_ \ '_/ _ \  _/ _ \  _| || | '_ \/ -_|_-<
-  |_|  \_,_|_||_\__|\__|_\___/_||_| | .__/_| \___/\__\___/\__|\_, | .__/\___/__/
-                                    |_|                       |__/|_|
-*/
-
-
 
 
 /*******************************************************************************
@@ -199,13 +195,28 @@ enum controllerType {
   _unKnown = 0xff
 };
 
-const uint8_t gammaCurve[64] = { // gamma = 2.0
-  5  , 12 , 18 , 24 , 30 , 36 , 42 , 47 , 52 , 57 , 62 , 66 , 71 , 75 , 78 , 82 ,
-  86 , 89 , 92 , 95 , 97 , 100, 102, 104, 106, 107, 109, 110, 111, 112, 112, 112,
-  113, 113, 113, 114, 114, 115, 117, 118, 120, 122, 124, 126, 129, 131, 134, 138,
-  141, 145, 149, 153, 157, 162, 167, 172, 177, 182, 188, 194, 200, 207, 213, 220
+enum { // operationMode
+  JOYSTICK = 0,
+  TRACKBALL
 };
 
+const  uint8_t gamma3 [256] PROGMEM = {  // non linar curve 
+  5,  5,  5,  5,  5,  5,  8,  8,  8,  8,  9,  9, 10, 10, 10, 11,
+ 11, 11, 12, 12, 13, 13, 13, 14, 14, 15, 16, 17, 17, 18, 19, 20,
+ 21, 21, 22, 23, 24, 25, 25, 26, 27, 28, 28, 29, 30, 30, 31, 32,
+ 32, 34, 35, 36, 38, 39, 40, 41, 43, 44, 45, 46, 47, 48, 49, 50,
+ 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 63, 65, 67, 68, 70, 72,
+ 73, 75, 76, 78, 79, 81, 82, 84, 85, 87, 89, 91, 93, 94, 96, 98,
+ 99,101,102,104,105,106,107,109,110,110,111,111,111,112,112,112,
+113,113,113,113,113,114,114,114,114,114,114,114,114,114,114,114,
+114,114,114,114,114,114,114,114,114,114,114,115,115,115,115,115,
+116,116,116,117,117,117,118,118,119,121,122,123,124,126,127,129,
+130,132,134,135,137,139,141,143,144,146,147,149,150,152,153,155,
+156,158,160,161,163,165,167,168,169,170,171,172,173,174,175,176,
+178,179,180,181,182,183,184,185,187,188,189,190,192,193,194,196,
+196,197,198,198,199,200,200,201,202,203,203,204,205,206,207,207,
+208,209,210,211,211,212,213,214,214,215,215,215,216,216,217,217,
+217,218,218,218,219,219,220,220,220,220,220,220,220,220,220,220 };
 
 /*******************************************************************************
                      _      _    _
@@ -215,18 +226,24 @@ const uint8_t gammaCurve[64] = { // gamma = 2.0
 
 */
 static volatile uint8_t CAVoff;
+static volatile uint8_t operationMode;
 static volatile uint8_t hline = 0;
 static volatile uint8_t potX1value = 0;
 static volatile uint8_t potX2value = 0;
 static volatile uint8_t potY1value = 0;
 static volatile uint8_t potY2value = 0;
 
-int8_t combinedXaxis;  // ponderated value of both stick movement on X axis
-int8_t combinedYaxis;  // ponderated value of both stick movement on Y axis
-int8_t  leftXaxis;
-int8_t rightXaxis;
-int8_t  leftYaxis;
-int8_t rightYaxis;
+//uint8_t combinedXaxis;  // ponderated value of both stick movement on X axis
+//uint8_t combinedYaxis;  // ponderated value of both stick movement on Y axis
+
+uint8_t  leftXaxis;
+uint8_t rightXaxis;
+uint8_t  leftYaxis;
+uint8_t rightYaxis;
+
+uint8_t singleControllerX, singleControllerY; // range 0..255
+uint8_t dualControllerX1,  dualControllerY1;  // range 0..255
+uint8_t dualControllerX2,  dualControllerY2;  // range 0..255
 
 uint16_t combinedButtons = 0;
 
@@ -243,36 +260,6 @@ ClassicController::Shared classic(controller);  // Read Classic Controller forma
        |_|_||_\__\___|_| |_|  \_,_| .__/\__/__/
                                   |_|
 */
-
-
-// Pin change interrupt, trigger by Cav line change state.
-ISR (PCINT0_vect) {
-  if (digitalRead(caVinputPin)) {  // rising edge ?
-    // Enable detection of pokey release pin for charging
-    pinMode(potX1pin, INPUT);
-    pinMode(potX2pin, INPUT);
-    pinMode(potY1pin, INPUT);
-    pinMode(potY2pin, INPUT);
-    CAVoff = 0;	  // flag that CAV voltage is present
-    ACSR |= (1 << ACIE) // reactivate analog comparator
-            | (1 << ACI); // clear any pending interrupt bit
-  } else { // Falling edge
-    // force all outputs to zero
-    pinMode(potX1pin, OUTPUT);
-    pinMode(potX2pin, OUTPUT);
-    pinMode(potY1pin, OUTPUT);
-    pinMode(potY2pin, OUTPUT);
-    digitalWrite(potX1pin, LOW); 
-    digitalWrite(potX2pin, LOW);
-    digitalWrite(potY1pin, LOW);
-    digitalWrite(potY2pin, LOW);
-
-    hline = 255; // make sure that no action will be taking at Hline interrupt
-    CAVoff = 1;	// flag that CAV voltage has dropped
-    ACSR |= (1 << ACI); // clear any pending interrupt on analog comparator
-  }
-}
-
 
 // Timer 2 interrupt occurs at each 64us
 ISR (TIMER2_COMPA_vect) {
@@ -299,8 +286,15 @@ ISR (TIMER2_COMPA_vect) {
 // Analog comparator, triggers when detect that pokey released POT inputs to charge
 ISR (ANALOG_COMP_vect) {
   //  pulseFlag();
+  // Todo: write directly to DDR/PORT registers to speed up ISR servicing.
   pinMode(potX1pin, OUTPUT);  // hold axis pin in LOW state
   digitalWrite(potX1pin, LOW);
+  pinMode(potY1pin, OUTPUT);  // hold axis pin in LOW state
+  digitalWrite(potY1pin, LOW);
+  pinMode(potX2pin, OUTPUT);  // hold axis pin in LOW state
+  digitalWrite(potX2pin, LOW);
+  pinMode(potY2pin, OUTPUT);  // hold axis pin in LOW state
+  digitalWrite(potY2pin, LOW);
 
   hline = 0;
   ACSR &= ~(1 << ACIE); // disable comparator
@@ -343,6 +337,8 @@ void setup() {
 
   pinMode(caVinputPin, INPUT);
 
+  operationMode = JOYSTICK;  // TODO implement PS/2 mouse trackball emulation
+
   // Setup Timer2
   TCCR2A = (0 << WGM20) // WGM[2..0] = 010 CTC mode, counts up overflow on OCR2A
            | (1 << WGM21); //
@@ -361,25 +357,6 @@ void setup() {
   ACSR = (1 << ACI)             // (Clear) Analog Comparator Interrupt Flag
          | (1 << ACIE)           // Analog Comparator Interrupt Enable
          | (1 << ACIS1) | (1 << ACIS0); // Trigger on rising edge
-
-  // Setup Pin Change Interrupt for Cav
-  PCICR = (1 << PCIE0) // Pin change interrupt enable for PCINT0..PCINT7
-          | (0 << PCIE1) // Pin change interrupt enable for PCINT8..PCINT14
-          | (0 << PCIE2); // Pin change interrupt enable for PCINT16..PCINT23
-
-  PCMSK0 = (0 << PCINT0) // Pin change enable for PB0 pin
-           | (0 << PCINT1) // Pin change enable for PB1 pin
-           | (0 << PCINT2) // Pin change enable for PB2 pin
-           | (0 << PCINT3) // Pin change enable for PB3 pin
-           | (0 << PCINT4) // Pin change enable for PB4 pin
-           | (1 << PCINT5) // Pin change enable for PB5 pin - Vac voltage is connected here
-           | (0 << PCINT6) // Pin change enable for PB6 pin
-           | (0 << PCINT7); // Pin change enable for PB7 pin
-
-
-  PCIFR = (1 << PCIF0) // Clear any pending interrupt flag
-          | (0 << PCIF1)
-          | (0 << PCIF2);
 
 
   sei();  // enable interrupts
@@ -416,16 +393,17 @@ void loop() {
 #endif
           disableOutputs();
       } // Switch
-      processControllerData();
+      processControllerData();      
+      delay(3);  // between controller samples
     } // while
     disableOutputs();
   } else { // Controller not connected}
-#ifdef DEBUG    
+#ifdef DEBUG
     Serial.println("No controller found!");
 #endif
     disableOutputs();
   }
-  delay(200);
+  delay(200);  // after controller sampling reading error
 }
 
 
@@ -439,8 +417,9 @@ void loop() {
 */
 
 void setKeypad ( uint8_t keyCode) {
-  char key[16] = {"123S456P789R*0#N"};
 #ifdef DEBUG
+  char key[16] = {'1', '2', '3', 'S', '4', '5', '6', 'P', '7', '8', '9', 'R', '*', '0', '#', 'N'};
+
   Serial.print (" Key:");
   Serial.print (keyCode);
   Serial.print ("->");
@@ -521,11 +500,11 @@ void releaseBottomFire1(void) {
 void disableOutputs() {
 #ifdef DEBUG
   Serial.println("Disable Outputs");
-#endif    
-    potX1value = 255;
-    potY1value = 255;
-    potX2value = 255;
-    potY2value = 255;
+#endif
+  potX1value = 255;
+  potY1value = 255;
+  potX2value = 255;
+  potY2value = 255;
 }
 
 
@@ -533,31 +512,39 @@ void disableOutputs() {
 //
 void mapNunchuckData() {
 
+  uint8_t leftXaxis, leftYaxis, rightXaxis, rightYaxis;
+
   //  Get button State
   combinedButtons = 0;
   if (nchuk.buttonZ()      ) combinedButtons |= btnA;     // (1<<4 )
   if (nchuk.buttonC()      ) combinedButtons |= btnB;     // (1<<5 )
 
-
-
   // Get Analog Values
-  leftXaxis = nchuk.joyX() >> 2;    // get values from left stick [0..63]
-  leftYaxis = nchuk.joyY() >> 2;
+  leftXaxis = nchuk.joyX() ;    
+  leftYaxis = 255 - nchuk.joyY() ;  // Invert Y Axis
 
   //map(value, fromLow, fromHigh, toLow, toHigh)
-  rightXaxis = map( nchuk.rollAngle(), -180, 180, 0, 63);
-  rightYaxis = map(nchuk.pitchAngle(), -180, 180, 0, 63);
+  rightXaxis = map( nchuk.rollAngle(), -180, 180, 0, 255);
+  rightYaxis = map(nchuk.pitchAngle(), -180, 180, 0, 255);
 
-  combinedXaxis = leftXaxis;
-  combinedYaxis = leftYaxis;
+  singleControllerX = leftXaxis;
+  dualControllerX1  = leftXaxis;
 
-
-
+  singleControllerY = leftYaxis;
+  dualControllerY1  = leftYaxis;  
+  
+  dualControllerX2  = rightXaxis;
+  dualControllerY2  = rightYaxis;
 }
+
 
 //
 //
 void mapClassicData() {
+
+#define MIN 0
+#define MAX 255
+
   //  Get button State
   combinedButtons = 0;
   if (classic.dpadUp()     ) combinedButtons |= btnUp;    // (1<<0 )
@@ -577,38 +564,67 @@ void mapClassicData() {
   if (classic.buttonPlus() ) combinedButtons |= btnPlus;  // (1<<12)
 
 
-  // Get Analog Values
-  leftXaxis = classic.leftJoyX();       // get values from left stick [0..63]
-  leftYaxis = 63-classic.leftJoyY();
-  rightXaxis = (classic.rightJoyX() << 1); // get the values for right [0..31]
-  rightYaxis = ( (31-classic.rightJoyY()) << 1); // and double then for [0..62]
+
+  // Get Analog values -
+  // After version 0.8.1 the extension controller libary return in the range 0-255
+  // for either original or knockoff controllers.
+  //
+
+  // Read analog controller axes and convert them to the -128..+127 range
+  int16_t joyLX = classic.leftJoyX() - 128;
+  int16_t joyLY = 128 - classic.leftJoyY();   // invert Y axis
+  int16_t joyRX = classic.rightJoyX() - 128;
+  int16_t joyRY = 128 - classic.rightJoyY();  // invert Y axis
+
+#if DEBUG > 1
+  Serial.print(" LX"); Serial.print (joyLX);
+  Serial.print(" LY"); Serial.print (joyLY);
+  Serial.print(" RX"); Serial.print (joyRX);
+  Serial.print(" RY"); Serial.print (joyRY);
+#endif
+
+  // Combine Left and Right controllers for use in single controller mode
+  int16_t Xcomb = joyLX + joyRX;
+  int16_t Ycomb = joyLY + joyRY;
+
+  if (Xcomb > 127) Xcomb = 127;    // saturate in the range -128..+127
+  if (Xcomb < -128) Xcomb = -128;
+
+  if (Ycomb > 127) Ycomb = 127;    // saturate in the range -128..+127
+  if (Ycomb < -128) Ycomb = -128;
 
 
-  // If D-Pad is pressed without a mode key then the D-Pad direction overimposes left X/Y axis
-  if ((combinedButtons & btnMode) == 0 ) {
-    // vertical axis, inverted (up=63,down=0)
-    if ( (combinedButtons & btnUp) && !(combinedButtons & btnDown) )
-      leftYaxis = 0;
-    else if ( !(combinedButtons & btnUp) && (combinedButtons & btnDown) )
-      leftYaxis = 63;
+  switch ( combinedButtons & (btnLeft | btnRight) ) { // left / right
+    case (btnLeft): // left
+      singleControllerX = MIN;
+      dualControllerX1 = MIN;
+      break;
+    case (btnRight): // right
+      singleControllerX = MAX;
+      dualControllerX1 = MAX;
+      break;
+    default: // up+down or none, convert value back to the range 0..255
+      singleControllerX = 128 + Xcomb;
+      dualControllerX1  = 128 + joyLX;
+  }
 
-    // horizontal axis, normal (left=0, right=63)
-    if ( (combinedButtons & btnLeft) && !(combinedButtons & btnRight) )
-      leftXaxis = 0;
-    else if ( !(combinedButtons & btnLeft) && (combinedButtons & btnRight) )
-      leftXaxis = 63;
-  } // btnMode
 
+  switch ( combinedButtons & (btnUp | btnDown)) { // up/down
+    case (btnUp): // up
+      singleControllerY = MIN;
+      dualControllerY1 = MIN;
+      break;
+    case (btnDown): // down
+      singleControllerY = MAX;
+      dualControllerY1 = MAX;
+      break;
+    default: // up+down or none, convert value back to the range 0..255
+      singleControllerY = 128 + Ycomb;
+      dualControllerY1  = 128 + joyLY;
+  }
 
-  // compute resulting X axis position
-  combinedXaxis = leftXaxis + rightXaxis - 32;
-  if (combinedXaxis > 63) combinedXaxis = 63;
-  if (combinedXaxis < 0)  combinedXaxis = 0;
-
-  // compute resulting Y axis position
-  combinedYaxis = leftYaxis + rightYaxis - 32;
-  if (combinedYaxis > 63) combinedYaxis = 63;
-  if (combinedYaxis < 0)  combinedYaxis = 0;
+  dualControllerX2  = 128 + joyRX;
+  dualControllerY2  = 128 + joyRY;
 
 }
 
@@ -699,28 +715,91 @@ void  processControllerData() {
       if (combinedButtons &  (btnB | btnLFT | btnY )) assertBottomFire1(); else releaseBottomFire1();
     }
   }
-  // Take care of directionals
 
 
-  // Populate analog axes information. Values will be used by interrupts
-  if (dualJoystick()) {
-    // Dual adapter connected, map different values for pot1/pot2
-    potX1value = gammaCurve[uint8_t(leftXaxis)];
-    potY1value = gammaCurve[uint8_t(leftYaxis)];
 
-    potX2value = gammaCurve[uint8_t(rightXaxis)];
-    potY2value = gammaCurve[uint8_t(rightYaxis)];
+  // Check for trackball / joystick query.
+  // The system 5200 drops voltage on pin 9 to differentiate a trackball from a joystick.
+  // +----------------+-------------+-------------+
+  // |Controller/Pin 9| Pot X value | Pot Y value |
+  // +----------+-----+-------------+-------------+
+  // |          | Vcc |   0 - 227   |   0 - 227   |
+  // | Joystick +-----+-------------+-------------+
+  // |          |  0  |    > 227    |    >227     |
+  // +----------+-----+-------------+-------------+
+  // |          | Vcc |   0 - 227   |   0 - 227   |
+  // | Trackball+-----+-------------+-------------+
+  // |          |  0  |    114      |     114     |
+  // +----------+-----+-------------+-------------+
+  //
 
-  } else {
-    // Not using dual controller adapter, use combined stick values
-    potX1value = gammaCurve[uint8_t(combinedXaxis)];
-    potY1value = gammaCurve[uint8_t(combinedYaxis)];
 
-    potX2value = potX1value;
-    potY2value = potY1value;
-  }
+  // associate values 
+  switch (operationMode ) {
 
-#ifdef DEBUG
+    case TRACKBALL:
+      if (digitalRead(caVinputPin)) { // VAC on, do normal temporization
+
+          // TODO process trackball data
+          potX1value = pgm_read_byte(gamma3 + dualControllerX1);
+          potY1value = pgm_read_byte(gamma3 + dualControllerY1);
+
+          potX2value =  114; // middle range
+          potY2value =  114;         
+
+      }  else {  // VAC off, set middle value
+        potX1value = 114;
+        potY1value = 114;
+
+        potX2value =  114;
+        potY2value =  114;
+      } // else
+
+      break;
+
+    case JOYSTICK:
+    default:
+      if (digitalRead(caVinputPin)) { // VAC on, do normal temporization
+
+        // Populate analog axes information. Values will be used by interrupts
+        if (dualJoystick()) {
+          // Dual adapter connected, map different values for pot1/pot2
+          potX1value = pgm_read_byte(gamma3 + dualControllerX1);
+          potY1value = pgm_read_byte(gamma3 + dualControllerY1);
+
+          potX2value =  pgm_read_byte(gamma3 + dualControllerX2);
+          potY2value =  pgm_read_byte(gamma3 + dualControllerY2);
+        } else {
+          // Not using dual controller adapter, use combined stick values
+          potX1value = pgm_read_byte(gamma3 + singleControllerX);
+          potY1value = pgm_read_byte(gamma3 + singleControllerY);
+
+          potX2value =  128;  // middle range
+          potY2value =  128;  // middle range
+         
+#ifdef DEBUG        
+        Serial.print("!");
+#endif
+          
+        } // else
+      } else {  // VAC off, do overvalue
+       
+        potX1value = 228;
+        potY1value = 228;
+
+        potX2value =  228;
+        potY2value =  228;
+
+#ifdef DEBUG        
+        Serial.print("@");
+#endif 
+
+        
+      } // else
+  } // switch
+
+
+#if DEBUG > 0
   Serial.print(" potX1:"); Serial.print(potX1value);
   Serial.print(" potY1:"); Serial.print(potY1value);
   Serial.print("/potX2:"); Serial.print(potX2value);
@@ -729,8 +808,6 @@ void  processControllerData() {
   Serial.print(" "); Serial.print(combinedButtons, BIN);
   //  Serial.println();
 #endif
-
-
 
 }
 
