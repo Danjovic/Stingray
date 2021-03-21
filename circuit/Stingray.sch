@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE eagle SYSTEM "eagle.dtd">
-<eagle version="7.2.0">
+<eagle version="6.5.0">
 <drawing>
 <settings>
 <setting alwaysvectorfont="no"/>
@@ -8647,7 +8647,7 @@ DIN female/male, etc.&lt;p&gt;
 <part name="M1" library="diy-modules" deviceset="ARDUINO-NANO-3.0" device=""/>
 <part name="P+2" library="supply1" deviceset="+5V" device=""/>
 <part name="P+6" library="supply1" deviceset="+5V" device=""/>
-<part name="R1" library="rcl" deviceset="R-EU_" device="0204/7" value="4k7"/>
+<part name="R1" library="rcl" deviceset="R-EU_" device="0204/7" value="1k"/>
 <part name="IC1" library="40xx" deviceset="4052" device="N"/>
 <part name="IC2" library="40xx" deviceset="4052" device="N"/>
 <part name="GND2" library="SparkFun-Aesthetics" deviceset="GND" device=""/>
